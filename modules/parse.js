@@ -5,6 +5,14 @@
    the file LICENSE-2.0 or at http://www.apache.org/licenses/LICENSE-2.0
 */
 
+/**
+ * @file modules/parse.js
+ * @description Core text parsing engine for Jetzt.
+ * Translates DOM elements and plain text strings into sequential visual instruction sets.
+ * Dissects sentences, paragraphs, isOL/UL/heading blocks, breaks down long words,
+ * and optional cleans out academic citations (e.g., APA/MLA/IEEE).
+ */
+
 (function (window) {
 
   var jetzt = window.jetzt;
@@ -14,11 +22,21 @@
 
   // splitting long words. Used by the Instructionator.
 
+  /**
+   * Determines if a word is long enough to require splitting for readability in the reader viewport.
+   * @param {string} word The word to evaluate.
+   * @returns {boolean} true if split-up is needed.
+   */
   function wordShouldBeSplitUp(word) {
     return word.length > 13 || word.length > 9 && word.indexOf("-") > -1;
   }
 
-  // split a long word into sensible sections
+  /**
+   * Splits a long word (or hyphenated expression) into multiple chunks.
+   * Keeps hyphen fragments or segments under 8 characters deep.
+   * @param {string} word The input word.
+   * @returns {string[]} An array of word segments/syllables.
+   */
   function splitLongWord (word) {
     if (wordShouldBeSplitUp(word)) {
       var result = [];
@@ -42,7 +60,7 @@
     }
   }
 
-  // regexp that matches in-text citations
+  // regexp that matches in-text citations (APA, Chicago, MLA, IEEE, etc.)
   var _reInTextCitation = (function () {
     var au = "((\\S\\.\\s)?(\\S+\\s)?\\S+?)";          // author
     var et = "(,?\\set\\sal\\.?)";                     // et al.
@@ -66,13 +84,19 @@
     return new RegExp("\\s?(" + hm + "|" + ie + ")", "g");
   })();
 
+  /**
+   * Strips out academic parenthetical or bracketed citation markers from a text body.
+   * @param {string} text Text string potentially containing citations.
+   * @returns {string} Sanitized string.
+   */
   function stripInTextCitation (text) {
     return text.replace(_reInTextCitation, "");
   }
 
   /**
-   * Helper class for generating jetzt instructions.
-   * Very subject to change.
+   * Helper class for generating jetz instruction sets.
+   * Aggregates token items, updates layout wrappers, and calculates delay speed/modifiers.
+   * @class Instructionator
    */
   function Instructionator () {
     // state
@@ -82,12 +106,18 @@
       , spacerInstruction = null
       , done = false;
 
-    // add a modifier to the next token
+    /**
+     * Flags the subsequent token to carry a specific delay/speed modifier.
+     * @param {string} mod Modifier type (e.g., 'start_clause').
+     */
     this.modNext = function (mod) {
       modifier = config.maxModifier(modifier, mod);
     };
 
-    // add a modifier to the previous token
+    /**
+     * Updates the immediately preceding token to carry a specific delay/speed modifier.
+     * @param {string} mod Modifier type.
+     */
     this.modPrev = function (mod) {
       if (instructions.length > 0) {
         var current = instructions[instructions.length-1].modifier;
@@ -95,7 +125,10 @@
       }
     };
 
-    // add a decorator to the previous token
+    /**
+     * Adds an end-of-token decorator string to the last parsed instruction.
+     * @param {string} dec Decorator text.
+     */
     this.decPrev = function (dec) {
       if (instructions.length > 0) {
         var current = instructions[instructions.length-1].decorator;
@@ -103,31 +136,42 @@
       }
     };
 
-    // start a wrap on the next token
+    /**
+     * Pushes a lexical visual enclosing wrap (like quotes or parentheses) onto the next token.
+     * @param {object} wrap Object with keys 'left' and 'right' enclosing characters.
+     */
     this.pushWrap = function (wrap) {
       wraps.push(wrap);
     };
 
-    // stop the specified wrap before the next token.
-    // Pops off any wraps in the way
+    /**
+     * Removes/stops the specified wrap before the next token.
+     * Pops everything down to the matching wrap.
+     * @param {object} wrap The wrap object to pop.
+     */
     this.popWrap = function (wrap) {
       var idx = wraps.lastIndexOf(wrap);
       if (idx > -1)
         wraps.splice(wraps.lastIndexOf(wrap), wraps.length);
     };
 
-    // pop all wraps
+    /**
+     * Clears all visual wraps.
+     */
     this.clearWrap = function (wrap) {
       wraps = [];
     };
 
+    // Attaches the prefix (left) and suffix (right) visual wraps to a given instruction object.
     var _addWraps = function (instr) {
       instr.leftWrap = wraps.map(function (w) { return w.left; }).join("");
       instr.rightWrap = wraps.map(function (w) { return w.right; }).reverse().join("");
       return instr;
     }
 
-    // put a spacer before the next token
+    /**
+     * Injects a visual space/separator before the next token is presented (e.g. at clause/sentence borders).
+     */
     this.spacer = function () {
       if (spacerInstruction) {
         spacerInstruction.modifier = "long_space";
@@ -136,11 +180,15 @@
           token: "   ",
           modifier: "short_space",
           decorator: ""
-        });
+         });
       }
     };
 
-    // add the token
+    /**
+     * Registers a text word token into the list of reader instructions.
+     * Breaks down the token into smaller segments internally if its character length is too high.
+     * @param {string} token Word token.
+     */
     this.token = function (token) {
       if (spacerInstruction) {
         instructions.push(spacerInstruction);
@@ -165,11 +213,16 @@
       spacerInstruction = null;
     };
 
+    /**
+     * Retrieves the final processed instruction array.
+     * @returns {object[]} Array of compiled instruction dictionaries.
+     */
     this.getInstructions = function () {
       return instructions;
     };
   }
 
+  // Predefined visual boundary characters mapped to wrapper contexts.
   var wraps = {
     guillemot: {left: "«", right: "»"},
     double_quote: {left: "“", right: "”"},
@@ -178,6 +231,13 @@
     blockquote: {left: "›", right: ""}  // U+203A
   };
 
+  /**
+   * Recursively parses DOM nodes, translating HTML block tags (H1-H6, P, BLOCKQUOTE, UL, etc.)
+   * and inline text tags into formatted speed reading instructions.
+   * @param {Node|Node[]} topnode The root DOM Element or Node list.
+   * @param {Instructionator} [$instructionator] Optional aggregator instance.
+   * @returns {object[]} Combined list of instructions.
+   */
   function parseDom(topnode,$instructionator) {
     var inst =  ($instructionator) ? $instructionator :  new Instructionator();
 
@@ -206,7 +266,7 @@
     for(var i=0;i<nodes.length;i++) {
         node = nodes[i];
 
-        //TODO add modifiers, e.g. based on node.nodeName
+        // Apply distinct formatting modifiers or wrappers depending on type of HTML tag
         switch(node.nodeName) {
           case "H1":
           case "H2":
@@ -253,7 +313,14 @@
     return inst.getInstructions();
   }
 
-  // convert raw text into instructions
+  /**
+   * Tokenizes and parses plain-text strings into RSVP visual reading instructions.
+   * Recognizes nested markers like double quotes, brackets, guillemots and maps pause delays
+   * according to trailing/leading punctuation marks.
+   * @param {string} text Plain-text code to process.
+   * @param {Instructionator} [$instructionator] Optional aggregator instance.
+   * @returns {object[]} List of instructions.
+   */
   function parseText (text,$instructionator) {
     if (config("strip_citation")) text = stripInTextCitation(text);
                         // long dashes ↓
@@ -354,6 +421,12 @@
     return $.getInstructions();
   }
 
+  /**
+   * Simple orchestrator that kicks off a specific parser on raw content using a fresh Instructionator.
+   * @param {function} parser The parser function (e.g. parseText).
+   * @param {*} content The content to parse.
+   * @returns {object[]} Combined RSVP instructions.
+   */
   function parseStuff (parser, content) {
     var instr = new Instructionator();
     parser(content, instr);

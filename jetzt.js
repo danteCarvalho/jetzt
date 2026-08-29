@@ -116,6 +116,8 @@
             scale: 1,
             dark: !1,
             show_message: !1,
+            tts_enabled: !0,
+            tts_lang: "auto",
             modifiers: { normal: 1, start_clause: 1, end_clause: 1.8, start_sentence: 1.3, end_sentence: 2.2, start_paragraph: 2, end_paragraph: 2.8, short_space: 1.5, long_space: 2.2 },
             view: { selection_color: "red", font_family: "Menlo, Consolas, Monaco, monospace" },
         };

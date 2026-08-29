@@ -5,6 +5,13 @@
    the file LICENSE-2.0 or at http://www.apache.org/licenses/LICENSE-2.0
 */
 
+/**
+ * @file modules/control.js
+ * @description Input control and keyboard binding system for Jetzt.
+ * Hooks keystroke events to execute visual reading adjustments like pausing, speed changes,
+ * jumping across sentences/paragraphs, scaling the reader, and switching color themes.
+ */
+
 (function (window) {
 
   var jetzt = window.jetzt
@@ -14,13 +21,26 @@
 
   jetzt.control = control;
 
+  /**
+   * Prevents browser default behavior and stops event cascading.
+   * @param {Event} ev Keyboard/interaction event
+   */
   function killEvent (ev) {
     ev.preventDefault();
     ev.stopImmediatePropagation();
   }
 
   /**
-   * hooks an executor up to keyboard controls.
+   * Binds custom keystrokes to an action executor instance when reader view is active.
+   * Key mappings:
+   *  - Escape: Quits Teraz/Jetzt.
+   *  - Arrow Up / Down: Increases / decreases words per minute.
+   *  - Arrow Left / Right: Rewinds or advances sentences (or paragraphs with Alt).
+   *  - Space: Pauses/Resumes reading.
+   *  - Plus / Minus: Adjusts user scale size.
+   *  - 0: Switches between Light and Dark mode.
+   *  - Slash / Question Mark: Toggles meta statistical messages.
+   * @param {object} executor Active execution/rendering handle.
    */
   control.keyboard = function (executor) {
     jetzt.view.reader.onKeyDown(function (ev) {
@@ -44,11 +64,21 @@
           break;
         case 37: //left
           killEvent(ev);
+          if (typeof executor.isAtStart === "function" && executor.isAtStart()) {
+            if (typeof jetzt.loadPrevParagraph === "function" && jetzt.loadPrevParagraph()) {
+              break;
+            }
+          }
           if (ev.altKey) executor.prevParagraph();
           else executor.prevSentence();
           break;
         case 39: //right
           killEvent(ev);
+          if (typeof executor.isAtEnd === "function" && executor.isAtEnd()) {
+            if (typeof jetzt.loadNextParagraph === "function" && jetzt.loadNextParagraph()) {
+              break;
+            }
+          }
           if (ev.altKey) executor.nextParagraph();
           else executor.nextSentence();
           break;
@@ -72,6 +102,12 @@
           killEvent(ev);
           config("dark", !config("dark"));
           break;
+        case 86: //v / V key, for toggling TTS voice reading
+          killEvent(ev);
+          var nowEnabled = !config("tts_enabled");
+          config("tts_enabled", nowEnabled);
+          jetzt.view.reader.setMessage("Voz: " + (nowEnabled ? "Ativada" : "Desativada"));
+          break;
         case 191: // / and ?
           killEvent(ev);
           config("show_message", !config("show_message"));
@@ -81,6 +117,7 @@
     });
   };
 
+  // Global window shortcut. Holding Alt + S initiates Jetzt selection mode.
   window.addEventListener("keydown", function (ev) {
     if (!jetzt.isOpen() && ev.altKey && ev.keyCode === 83) {
       ev.preventDefault();

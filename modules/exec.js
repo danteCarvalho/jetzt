@@ -57,6 +57,151 @@
       , index = 0       // the index of the current instruction
       , runLoop;        // the run loop timeout
 
+    function setRunning (val) {
+      if (running !== val) {
+        running = val;
+        if (typeof reader.onPlayStateChange === "function") {
+          reader.onPlayStateChange(running);
+        }
+      }
+    }
+
+    this.isRunning = function () {
+      return running;
+    };
+
+    var activeUtterance = null; // speaks the remaining text synchronized with view
+    var currentWpm = config("target_wpm");
+    var currentTts = config("tts_enabled");
+    var currentTtsLang = config("tts_lang");
+
+    // Live configuration listener to handle real-time changes in TTS or speed settings
+    var unregisterConfigListener = config.onChange(function () {
+      var newTts = config("tts_enabled");
+      var newWpm = config("target_wpm");
+      var newTtsLang = config("tts_lang");
+      
+      if (running) {
+        if (newTts !== currentTts || newWpm !== currentWpm || newTtsLang !== currentTtsLang) {
+          if (newTts) {
+            clearTimeout(runLoop);
+            speakRemaining();
+          } else {
+            stopSpeech();
+            defer(0);
+          }
+        }
+      }
+      
+      currentTts = newTts;
+      currentWpm = newWpm;
+      currentTtsLang = newTtsLang;
+    });
+
+    /**
+     * Synthesizes and plays the remainder of the text starting from the current index.
+     * Captures word boundary events to visually advance index synchronously with the voice.
+     */
+    function speakRemaining() {
+      if (!config("tts_enabled")) return;
+
+      // Clean up previous event listeners on existing activeUtterance and cancel speech safely
+      stopSpeech();
+
+      if (index >= instructions.length) return;
+
+      var remainingInstructions = instructions.slice(index);
+      var fullText = "";
+      var tempMap = []; // Character index mapped to instruction index in main array
+
+      for (var i = 0; i < remainingInstructions.length; i++) {
+        var realIdx = index + i;
+        var instr = remainingInstructions[i];
+        var token = instr.token || "";
+
+        var startPos = fullText.length;
+        fullText += token + " ";
+        var endPos = fullText.length;
+
+        for (var c = startPos; c < endPos; c++) {
+          tempMap[c] = realIdx;
+        }
+      }
+
+      if (!fullText.trim()) return;
+
+      activeUtterance = new SpeechSynthesisUtterance(fullText);
+
+      // Convert target RSVP WPM to TTS play rate (clamped between 0.5 and 3.0)
+      var targetWpm = config("target_wpm") || 400;
+      activeUtterance.rate = Math.min(3.0, Math.max(0.5, targetWpm / 160));
+
+      // Attempt to assign matching native language voice
+      if (window.speechSynthesis.getVoices) {
+        var voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          var targetLang = config("tts_lang") || "auto";
+          if (targetLang === "auto") {
+            targetLang = document.documentElement.lang || "pt";
+          }
+          var voice = voices.find(function (v) {
+            return v.lang.toLowerCase().indexOf(targetLang.toLowerCase()) > -1 ||
+                   targetLang.toLowerCase().indexOf(v.lang.toLowerCase()) > -1;
+          });
+          if (voice) {
+            activeUtterance.voice = voice;
+            activeUtterance.lang = voice.lang;
+          } else {
+            activeUtterance.lang = targetLang;
+          }
+        }
+      }
+
+      // Synchronize visual display index on each spoken word boundary event
+      activeUtterance.onboundary = function (event) {
+        if (!running || !config("tts_enabled")) return;
+        if (event.name === "word") {
+          var charIndex = event.charIndex;
+          var realIndex = tempMap[charIndex];
+          if (typeof realIndex !== "undefined") {
+            if (realIndex >= index) {
+              index = realIndex;
+              updateReader(instructions[index]);
+            }
+          }
+        }
+      };
+
+      activeUtterance.onend = function () {
+        if (running && config("tts_enabled")) {
+          index = instructions.length;
+          updateReader();
+          setRunning(false);
+          activeUtterance = null;
+        }
+      };
+
+      activeUtterance.onerror = function (evt) {
+        console.warn("Speech Synthesis interaction error: ", evt);
+      };
+
+      window.speechSynthesis.speak(activeUtterance);
+    }
+
+    /**
+     * Halts/stops all TTS speech playback. Prevents asynchronous cancel events
+     * from triggering unexpected state transitions by clearing active handlers.
+     */
+    function stopSpeech() {
+      if (activeUtterance) {
+        activeUtterance.onboundary = null;
+        activeUtterance.onend = null;
+        activeUtterance.onerror = null;
+      }
+      window.speechSynthesis.cancel();
+      activeUtterance = null;
+    }
+
     function updateReader (instr) {
       if (typeof instr === "undefined") {
         if (index < instructions.length) {
@@ -112,7 +257,7 @@
         if (running && index < instructions.length) {
           handleInstruction(instructions[index++]);
         } else {
-          running = false;
+          setRunning(false);
         }
       }, time);
     }
@@ -124,8 +269,12 @@
       if (index === instructions.length) {
         index = 0;
       }
-      running = true;
-      defer(0);
+      setRunning(true);
+      if (config("tts_enabled")) {
+        speakRemaining();
+      } else {
+        defer(0);
+      }
     };
 
     /**
@@ -133,7 +282,20 @@
      */
     this.stop = function () {
       clearTimeout(runLoop);
-      running = false;
+      setRunning(false);
+      if (config("tts_enabled")) {
+        stopSpeech();
+      }
+    };
+
+    /**
+     * cleanup listener bindings and stop interactions
+     */
+    this.destroy = function () {
+      this.stop();
+      if (unregisterConfigListener) {
+        unregisterConfigListener();
+      }
     };
 
     /**
@@ -154,7 +316,11 @@
       while (index > 0 && !startModifiers[instructions[index].modifier]) {
         index--;
       }
-      if (!running) updateReader();
+      if (!running) {
+        updateReader();
+      } else if (config("tts_enabled")) {
+        speakRemaining();
+      }
     };
 
     /**
@@ -166,7 +332,11 @@
                && !startModifiers[instructions[index].modifier]) {
         index++;
       }
-      if (!running) updateReader();
+      if (!running) {
+        updateReader();
+      } else if (config("tts_enabled")) {
+        speakRemaining();
+      }
     };
 
     /**
@@ -178,7 +348,11 @@
       while (index > 0 && instructions[index].modifier != "start_paragraph") {
         index--;
       }
-      if (!running) updateReader();
+      if (!running) {
+        updateReader();
+      } else if (config("tts_enabled")) {
+        speakRemaining();
+      }
     };
 
     /**
@@ -190,7 +364,27 @@
               && instructions[index].modifier != "start_paragraph") {
         index++;
       }
-      if (!running) updateReader();
+      if (!running) {
+        updateReader();
+      } else if (config("tts_enabled")) {
+        speakRemaining();
+      }
+    };
+
+    /**
+     * Check if the reading index is at the very beginning of the instructions.
+     * @returns {boolean}
+     */
+    this.isAtStart = function () {
+      return index <= 1;
+    };
+
+    /**
+     * Check if the reading index is at the very end of the instructions.
+     * @returns {boolean}
+     */
+    this.isAtEnd = function () {
+      return index >= instructions.length - 1;
     };
   }
 

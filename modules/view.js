@@ -48,18 +48,196 @@
       , progressBar = div("sr-progress")
       , message = div("sr-message")
       , reticle = div("sr-reticle")
+      , langSelect = (function () {
+          var sel = H.elem("select", "sr-lang-select");
+          var langs = [
+            { code: "auto", name: "Globo (Auto)" },
+            { code: "pt",   name: "PT (Português)" },
+            { code: "en",   name: "EN (English)" },
+            { code: "es",   name: "ES (Español)" },
+            { code: "fr",   name: "FR (Français)" },
+            { code: "it",   name: "IT (Italiano)" },
+            { code: "de",   name: "DE (Deutsch)" }
+          ];
+          langs.forEach(function (lang) {
+            var opt = document.createElement("option");
+            opt.value = lang.code;
+            opt.textContent = lang.name;
+            sel.appendChild(opt);
+          });
+          sel.onchange = function () {
+            config("tts_lang", sel.value);
+            grabFocus();
+          };
+          sel.onkeydown = sel.onkeyup = sel.onkeypress = function (ev) {
+            ev.stopPropagation();
+          };
+          return sel;
+        })()
       , wordBox = div("sr-word-box", [
-          reticle, progressBar, message, word, wpm
+          reticle, progressBar, message, word, wpm, langSelect
         ])
       , box = div("sr-reader", [
           leftWrap,
           wordBox,
           rightWrap
-        ])
+        ]);
 
-      , wrapper = div("sr-reader-wrapper", [box])
+    var mobileControls = null;
+    var btnPlayPause = null;
+    var isFirefox = /Firefox/i.test(navigator.userAgent);
+    if (H.isMobile() || isFirefox) {
+      var btnPrev = H.elem("button", "sr-mobile-btn sr-mobile-prev");
+      btnPrev.innerHTML = "&#9664;"; // left arrow symbol: ◀
+      btnPrev.title = "Voltar";
+      btnPrev.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var executor = jetzt.executor;
+        if (executor) {
+          if (typeof executor.isAtStart === "function" && executor.isAtStart()) {
+            if (typeof jetzt.loadPrevParagraph === "function") {
+              jetzt.loadPrevParagraph();
+            }
+          } else {
+            executor.prevSentence();
+          }
+        }
+        grabFocus();
+      };
+      btnPrev.onmousedown = function (e) { e.preventDefault(); };
 
+      var btnDecSpeed = H.elem("button", "sr-mobile-btn sr-mobile-dec-speed");
+      btnDecSpeed.innerHTML = "- Vel";
+      btnDecSpeed.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        config.adjustWPM(-10);
+        grabFocus();
+      };
+      btnDecSpeed.onmousedown = function (e) { e.preventDefault(); };
+
+      btnPlayPause = H.elem("button", "sr-mobile-btn sr-mobile-play-pause");
+      btnPlayPause.innerHTML = "&#9654; Iniciar"; // Default starting state
+      btnPlayPause.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var executor = jetzt.executor;
+        if (executor) {
+          executor.toggleRunning();
+        }
+        grabFocus();
+      };
+      btnPlayPause.onmousedown = function (e) { e.preventDefault(); };
+
+      var btnIncSpeed = H.elem("button", "sr-mobile-btn sr-mobile-inc-speed");
+      btnIncSpeed.innerHTML = "+ Vel";
+      btnIncSpeed.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        config.adjustWPM(+10);
+        grabFocus();
+      };
+      btnIncSpeed.onmousedown = function (e) { e.preventDefault(); };
+
+      var btnNext = H.elem("button", "sr-mobile-btn sr-mobile-next");
+      btnNext.innerHTML = "&#9654;"; // right arrow symbol: ▶
+      btnNext.title = "Avançar";
+      btnNext.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var executor = jetzt.executor;
+        if (executor) {
+          if (typeof executor.isAtEnd === "function" && executor.isAtEnd()) {
+            if (typeof jetzt.loadNextParagraph === "function") {
+              jetzt.loadNextParagraph();
+            }
+          } else {
+            executor.nextSentence();
+          }
+        }
+        grabFocus();
+      };
+      btnNext.onmousedown = function (e) { e.preventDefault(); };
+
+      mobileControls = div("sr-mobile-controls", [
+        btnPrev,
+        btnDecSpeed,
+        btnPlayPause,
+        btnIncSpeed,
+        btnNext
+      ]);
+      mobileControls.onmousedown = function (e) {
+        e.preventDefault();
+      };
+    }
+
+    var paragraphControls = null;
+    if (H.isMobile() || isFirefox) {
+      var btnPrevPara = H.elem("button", "sr-mobile-btn sr-para-btn sr-para-prev");
+      btnPrevPara.innerHTML = "&#10094;&#10094; Voltar Parágrafo";
+      btnPrevPara.title = "Voltar Parágrafo";
+      btnPrevPara.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof jetzt.loadPrevParagraph === "function" && jetzt.loadPrevParagraph()) {
+          grabFocus();
+          return;
+        }
+        var executor = jetzt.executor;
+        if (executor && typeof executor.prevParagraph === "function") {
+          executor.prevParagraph();
+        }
+        grabFocus();
+      };
+      btnPrevPara.onmousedown = function (e) { e.preventDefault(); };
+
+      var btnNextPara = H.elem("button", "sr-mobile-btn sr-para-btn sr-para-next");
+      btnNextPara.innerHTML = "Próximo Parágrafo &#10095;&#10095;";
+      btnNextPara.title = "Próximo Parágrafo";
+      btnNextPara.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof jetzt.loadNextParagraph === "function" && jetzt.loadNextParagraph()) {
+          grabFocus();
+          return;
+        }
+        var executor = jetzt.executor;
+        if (executor && typeof executor.nextParagraph === "function") {
+          executor.nextParagraph();
+        }
+        grabFocus();
+      };
+      btnNextPara.onmousedown = function (e) { e.preventDefault(); };
+
+      paragraphControls = div("sr-mobile-paragraph-controls", [
+        btnPrevPara,
+        btnNextPara
+      ]);
+      paragraphControls.onmousedown = function (e) {
+        e.preventDefault();
+      };
+    }
+
+    var wrapperContents = [box];
+    if (mobileControls) {
+      wrapperContents.unshift(mobileControls);
+    }
+    if (paragraphControls) {
+      wrapperContents.push(paragraphControls);
+    }
+    var wrapper = div("sr-reader-wrapper", wrapperContents)
       , unlisten;
+
+    this.onPlayStateChange = function (running) {
+      if (btnPlayPause) {
+        if (running) {
+          btnPlayPause.innerHTML = "&#9208; Parar";
+        } else {
+          btnPlayPause.innerHTML = "&#9654; Iniciar";
+        }
+      }
+    };
 
     box.onkeyup = box.onkeypress = function (ev) {
       if(!ev.ctrlKey && !ev.metaKey) {
@@ -94,6 +272,8 @@
       this.setWPM(config("target_wpm"));
       this.setFont(config("font_family"));
       this.setFontWeight(config("font_weight"));
+
+      langSelect.value = config("tts_lang") || "auto";
 
       if (config("show_message")) {
         this.showMessage();

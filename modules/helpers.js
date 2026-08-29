@@ -133,7 +133,13 @@
 
   H.clone = function (obj) {
     return JSON.parse(JSON.stringify(obj));
-  }
+  };
+
+  H.isMobile = function () {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           (window.innerWidth <= 800) || 
+           ('ontouchstart' in window);
+  };
 
 })(this);
 

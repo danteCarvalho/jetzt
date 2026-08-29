@@ -5,14 +5,29 @@
    the file LICENSE-2.0 or at http://www.apache.org/licenses/LICENSE-2.0
 */
 
+/*
+   Licensed under the Apache License v2.0.
+
+   A copy of which can be found at the root of this distribution in
+   the file LICENSE-2.0 or at http://www.apache.org/licenses/LICENSE-2.0
+*/
+
+/**
+ * @file modules/config.js
+ * @description Manages options, themes, and configuration state of the Jetzt reader.
+ * Handles loading, saving, syncing, and custom configurations for user preferences
+ * like reading speed (WPM), layouts, scaling, and color themes.
+ */
+
 (function (window) {
 
   var jetzt = window.jetzt
     , H = jetzt.helpers;
 
-  // if you add any properties to themes, make sure to bump this
+  // Configuration schema version. If schema changes in new releases, bump this.
   var CONFIG_VERSION = 0;
 
+  // Default color schemes (classic light/dark themes)
   var DEFAULT_THEMES = [
     {
       "name": "Classic",
@@ -47,9 +62,10 @@
         }
       }
     }
-    // put more themes here
   ];
 
+  // Modifiers define the relative delay applied to words based on grammar/layout structures.
+  // E.g., short/long sentences and paragraph transitions slow down reading pace for better comprehension.
   var DEFAULT_MODIFIERS = {
     normal: 1,
     start_clause: 1,
@@ -62,17 +78,17 @@
     long_space: 2.2
   }
 
-  // Don't commit changes to these without prior approval please
+  // Default user settings for the Jetzt RSVP reader.
   var DEFAULT_OPTIONS = {
-    // if we change config structure in future versions, having this means
-    // we can update users' persisted configs to match.
     config_version: CONFIG_VERSION,
-    target_wpm: 400,
-    scale: 1,
-    dark: false,
+    target_wpm: 400, // Words per minute default speed
+    scale: 1,        // Text scale multiplier
+    dark: false,     // Dark mode toggle
     selected_theme: 0,
     show_message: false,
-    strip_citation: false,
+    strip_citation: false, // Strips citation brackets or in-text citations if true
+    tts_enabled: true,  // Enable/disable Text-to-Speech (read-aloud) synchronized reading
+    tts_lang: "auto",    // Default reading language ("auto", "pt", "en", "es", "fr", "it", "de", etc.)
     selection_color: "#FF0000",
     modifiers: DEFAULT_MODIFIERS,
     font_family: "Menlo, Monaco, Consolas, monospace",
@@ -83,18 +99,21 @@
 
   /*** STATE ***/
 
-  // This is where we store the options for the current instance of jetzt.
-  // The identity of the object never changes.
+  // Current session configuration options, initialized with default values.
   var options = H.clone(DEFAULT_OPTIONS);
 
-  // list of folks to notify of changes
+  // Array of change listener callbacks
   var listeners = [];
 
+  // Triggers checking and notifying all registered change listeners when config updates
   function announce () {
     listeners.forEach(function (cb) { cb(); });
   }
 
-  // recursive lookup. Like clojure's get-in;
+  /**
+   * Recursive lookup function. Like Clojure's get-in.
+   * Traverses a deep object path to read a nested option.
+   */
   function lookup (map, keyPath) {
     if (keyPath.length === 0) throw new Error("No keys specified.");
 
@@ -115,7 +134,7 @@
     }
   }
 
-  // recursive put. Like clojure's assoc-in
+  // recursive put. Like clojure's assoc-in. Writes a value at a deep nested path of an object.
   function put (map, keyPath, val) {
     if (keyPath.length === 0) throw new Error("No keys specified.");
 
@@ -134,16 +153,18 @@
 
   /*** BACKEND ***/
 
-  // the backend is a swappable object with two methods, get and set. 
-  // get takes a cb and should invoke the callback, supplying the persisted
-  // JSON if available, or some falsey value if not. Set takes some json and
-  // presumably puts it somewhere. Or not. whatevs.
-
-  // It is initialised with a localStorage placeholder for the bookmarklet and
-  // demo page.
+  // The configBackend defines the storage system used to read/write settings.
+  // It is a swappable interface with get and set methods.
+  // get: takes a callback and retrieves serialized JSON representing the stored options.
+  // set: accepts serialized JSON and persists it.
+  // Defaults to a localStorage-based backend, useful for bookmarklets and standalone demo pages.
   var KEY = "jetzt_options";
 
   var configBackend = {
+    /**
+     * Retrieves the stored configuration.
+     * @param {function} cb Callback invoked with the options JSON string (or falsey if non-existent).
+     */
     get: function (cb) {
       var json = localStorage.getItem(KEY);
       if(json) {
@@ -152,6 +173,10 @@
         cb(json);
       }
     },
+    /**
+     * Persists the given configuration JSON string inside localStorage.
+     * @param {string} json Serialized options.
+     */
     set: function (json) {
       localStorage.setItem(KEY, json);
     }
@@ -159,15 +184,24 @@
 
   /*** (DE)SERIALISATION ***/
 
+  /**
+   * Serializes the current active options object and writes it to the config backend.
+   */
   function persist () {
     configBackend.set(JSON.stringify(options));
   }
 
+  /**
+   * Deserializes a config JSON string into active options.
+   * Handles migrations for legacy configuration versions and notifies listeners of changes.
+   * @param {string} json Configuration JSON to load.
+   */
   function unpersist (json) {
     try {
       var opts = JSON.parse(json || "{}")
         , repersist = false;
 
+      // Migrate obsolete structures if user's saved config version does not match CONFIG_VERSION.
       if (opts.config_version != CONFIG_VERSION) {
 
         // update custom themes
@@ -185,6 +219,7 @@
 
       H.recursiveExtend(options, opts);
 
+      // Expose globally for sandbox debugging/access
       window.jazz = options;
 
       repersist && persist();
@@ -239,8 +274,10 @@
   config.DEFAULT_THEMES = H.clone(DEFAULT_THEMES);
 
   /**
-   * takes a callback and invokes it each time an option changes
-   * returns a function which, when invoked, unregisters the callback
+   * Registers a change listener callback to be run whenever options list is updated.
+   * Returns an unregister handle function.
+   * @param {function} cb Callback function
+   * @returns {function} Unregister function
    */
   config.onChange = function (cb) {
     listeners.push(cb);
@@ -248,9 +285,8 @@
   };
 
   /**
-   * Set the config 'backend' store. Should be an object with methods
-   * void get(cb(opts))
-   * void set(opts)
+   * Swaps the config storage backend, pulls updated options from it, and broadcasts the event.
+   * @param {object} backend Storage backend object implementing get(cb) and set(val) methods.
    */
   config.setBackend = function (backend) {
     configBackend = backend;
@@ -259,7 +295,8 @@
   };
 
   /**
-   * Triggers an automatic reload of the persisted options
+   * Force refreshes the configuration options from the active storage backend.
+   * @param {function} [cb] Optional callback executed after unpersist finishes.
    */
   config.refresh = function (cb) {
     configBackend.get(function (json) {
@@ -268,30 +305,45 @@
     });
   };
 
+  /**
+   * Retrieves the currently selected reader UI color and opacity theme.
+   * @returns {object} Selected theme dictionary.
+   */
   config.getSelectedTheme = function () {
     return DEFAULT_THEMES[options.selected_theme] || DEFAULT_THEMES[0];
   };
 
   /**
-   * convenience function for finding the highest of two modifiers.
+   * Compares two speed modifiers and returns the one representing a larger delay.
+   * @param {string} a Modifier key A
+   * @param {string} b Modifier key B
+   * @returns {string} The modifier key with the higher delay multiplier
    */
   config.maxModifier = function (a, b) {
     return this(["modifiers", a]) > this(["modifiers", b]) ? a : b;
   };
 
+  /**
+   * Adjusts the words-per-minute target speed by a delta value. Clamps to bounds.
+   * @param {number} diff Speed difference (e.g., +25 or -25).
+   */
   config.adjustWPM = function (diff) {
     options.target_wpm = H.clamp(100, options.target_wpm + diff, 1500);
     announce();
     persist();
   };
 
+  /**
+   * Adjusts the interface / text scale size. Clamps scale factor between 0 and 1.
+   * @param {number} diff Change delta for scale factor.
+   */
   config.adjustScale = function (diff) {
     this("scale", H.clamp(0, options.scale + diff, 1));
   };
 
 
   /**
-   * might be neccessary to trigger a save manually
+   * Manually persists current active configuration options into the storage backend.
    */
   config.save = function () {
     persist();

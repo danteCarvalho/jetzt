@@ -6,6 +6,16 @@
   "version": "2.0.0",
   "homepage_url": "https://ds300.github.io/jetzt",
 
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "jetzt-speed-reading@ds300.github.io",
+      "strict_min_version": "57.0"
+    },
+    "gecko_android": {
+      "strict_min_version": "120.0"
+    }
+  },
+
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*", "file:///*"],
