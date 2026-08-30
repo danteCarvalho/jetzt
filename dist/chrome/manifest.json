@@ -54,7 +54,7 @@
          "default_title" : "speed-read with jetzt"        
     },
     "background": {
-	    "scripts": ["background.js"]
+	    "service_worker": "background.js"
 	},
     "options_ui": { "page": "options/index.html" }
 }

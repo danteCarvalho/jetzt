@@ -6,7 +6,14 @@
     "Dante Carvalho Costa"
   ],
   "scripts": {
-    "start": "grunt"
+    "start": "grunt",
+    "firefox": "grunt firefox",
+    "chrome": "grunt chrome",
+    "build": "grunt build",
+    "pack-firefox": "grunt build-firefox-zip",
+    "pack-chrome": "grunt build-chrome-zip",
+    "pack-all": "grunt build-all-zips",
+    "android": "npm run firefox && npx web-ext run --target=firefox-android --firefox-apk-component=org.mozilla.fenix.IntentReceiverActivity"
   },
   "devDependencies": {
     "grunt": "~0.4.4",
