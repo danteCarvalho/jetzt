@@ -1,5 +1,5 @@
 /*! jetzt 2014-03-17
- * https://github.com/ds300/jetzt/
+ * https://github.com/danteCarvalho/jetzt/
  * Copyright (c) 2014 David Sheldrick and contributors; Licensed Apache 2.0 */
 !(function (a) {
     return "undefined" != typeof a.jetzt ? void console.warn("jetzt unable to initialize, window.jetzt already set") : void (a.jetzt = {});

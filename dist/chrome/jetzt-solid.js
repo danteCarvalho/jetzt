@@ -1,5 +1,5 @@
-/*! jetzt 2026-08-29
-* https://ds300.github.io/jetzt/
+/*! jetzt 2026-09-14
+* https://github.com/danteCarvalho/jetzt/
 * Copyright (c) 2026 David Sheldrick and contributors; Licensed Apache 2.0 */
 (function (window) {
   
@@ -2061,8 +2061,6 @@
 
 
   function initMobileSelectionBubble() {
-    if (!H.isMobile()) return;
-
     var bubble = document.createElement("div");
     bubble.className = "sr-mobile-selection-bubble";
     

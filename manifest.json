@@ -3,13 +3,16 @@
 
   "name": "jetzt",
   "description": "Speed Reading",
-  "version": "2.0.0",
-  "homepage_url": "https://ds300.github.io/jetzt",
+  "version": "4.0.0",
+  "homepage_url": "https://github.com/danteCarvalho/jetzt",
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "jetzt-speed-reading@ds300.github.io",
-      "strict_min_version": "109.0"
+      "id": "jetzt-speed-reading@danteCarvalho.github.io",
+      "strict_min_version": "109.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     },
     "gecko_android": {
       "strict_min_version": "120.0"

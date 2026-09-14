@@ -199,8 +199,6 @@
 
 
   function initMobileSelectionBubble() {
-    if (!H.isMobile()) return;
-
     var bubble = document.createElement("div");
     bubble.className = "sr-mobile-selection-bubble";
     

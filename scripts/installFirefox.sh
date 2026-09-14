@@ -1,0 +1,1 @@
+npx web-ext run --target=firefox-android --android-device=78eeff58 --firefox-apk=org.mozilla.firefox --firefox-apk-component=org.mozilla.fenix.IntentReceiverActivity
