@@ -81,8 +81,13 @@
       var newWpm = config("target_wpm");
       var newTtsLang = config("tts_lang");
       
-      if (running) {
-        if (newTts !== currentTts || newWpm !== currentWpm || newTtsLang !== currentTtsLang) {
+      if (running && newWpm !== currentWpm) {
+        // Changing speed should pause playback so user can resume at the new pace.
+        clearTimeout(runLoop);
+        stopSpeech();
+        setRunning(false);
+      } else if (running) {
+        if (newTts !== currentTts || newTtsLang !== currentTtsLang) {
           if (newTts) {
             clearTimeout(runLoop);
             speakRemaining();

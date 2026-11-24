@@ -5,3 +5,15 @@
 /jetzt-solid.js
 /jetzt-solid.min.js
 /web-ext-artifacts
+/dist
+
+# packaged build artifacts
+/jetzt-chrome-extension.zip
+/jetzt-firefox-extension.zip
+/jetzt-mobile-extension.zip
+
+# local logs/temp files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+Thumbs.db

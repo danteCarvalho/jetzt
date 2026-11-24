@@ -16,6 +16,7 @@
     "android": "npm run firefox && npx web-ext run --target=firefox-android --firefox-apk-component=org.mozilla.fenix.IntentReceiverActivity"
   },
   "devDependencies": {
+    "bestzip": "^4.0.4",
     "grunt": "~0.4.4",
     "grunt-cli": "^1.5.0",
     "grunt-contrib-concat": "~0.3.0",
