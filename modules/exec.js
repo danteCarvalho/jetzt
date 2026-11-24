@@ -71,9 +71,69 @@
     };
 
     var activeUtterance = null; // speaks the remaining text synchronized with view
+    var speechStartWatchdog = null;
+    var voicesChangedListener = null;
+    var voicesLoadPoller = null;
     var currentWpm = config("target_wpm");
     var currentTts = config("tts_enabled");
     var currentTtsLang = config("tts_lang");
+
+    function clearSpeechStartWatchdog() {
+      if (speechStartWatchdog) {
+        clearTimeout(speechStartWatchdog);
+        speechStartWatchdog = null;
+      }
+    }
+
+    function clearVoicesWait() {
+      if (voicesLoadPoller) {
+        clearInterval(voicesLoadPoller);
+        voicesLoadPoller = null;
+      }
+
+      if (voicesChangedListener && window.speechSynthesis && window.speechSynthesis.removeEventListener) {
+        window.speechSynthesis.removeEventListener("voiceschanged", voicesChangedListener);
+      }
+      voicesChangedListener = null;
+    }
+
+    function hasLoadedVoices() {
+      if (!window.speechSynthesis || !window.speechSynthesis.getVoices) return false;
+      var voices = window.speechSynthesis.getVoices();
+      return !!(voices && voices.length);
+    }
+
+    function waitForVoicesThenSpeak() {
+      clearVoicesWait();
+      if (!running || !config("tts_enabled")) return;
+
+      voicesChangedListener = function () {
+        if (!running || !config("tts_enabled")) {
+          clearVoicesWait();
+          return;
+        }
+        if (hasLoadedVoices()) {
+          clearVoicesWait();
+          speakRemaining();
+        }
+      };
+
+      if (window.speechSynthesis.addEventListener) {
+        window.speechSynthesis.addEventListener("voiceschanged", voicesChangedListener);
+      }
+
+      // Some engines fail to emit voiceschanged, so poll until voices are ready.
+      voicesLoadPoller = setInterval(function () {
+        if (!running || !config("tts_enabled")) {
+          clearVoicesWait();
+          return;
+        }
+        if (hasLoadedVoices()) {
+          clearVoicesWait();
+          speakRemaining();
+        }
+      }, 200);
+    }
 
     // Live configuration listener to handle real-time changes in TTS or speed settings
     var unregisterConfigListener = config.onChange(function () {
@@ -110,10 +170,20 @@
     function speakRemaining() {
       if (!config("tts_enabled")) return;
 
+      if (typeof window.speechSynthesis === "undefined" || typeof window.SpeechSynthesisUtterance === "undefined") {
+        defer(0);
+        return;
+      }
+
       // Clean up previous event listeners on existing activeUtterance and cancel speech safely
       stopSpeech();
 
       if (index >= instructions.length) return;
+
+      if (!hasLoadedVoices()) {
+        waitForVoicesThenSpeak();
+        return;
+      }
 
       var remainingInstructions = instructions.slice(index);
       var fullText = "";
@@ -134,6 +204,9 @@
       }
 
       if (!fullText.trim()) return;
+
+      // Always paint the first token immediately so user sees reading started.
+      updateReader(instructions[index]);
 
       activeUtterance = new SpeechSynthesisUtterance(fullText);
 
@@ -182,6 +255,7 @@
       activeUtterance.onboundary = function (event) {
         if (!running || !config("tts_enabled")) return;
         if (event.name === "word") {
+          clearSpeechStartWatchdog();
           var charIndex = event.charIndex;
           var realIndex = tempMap[charIndex];
           if (typeof realIndex !== "undefined") {
@@ -194,6 +268,7 @@
       };
 
       activeUtterance.onend = function () {
+        clearSpeechStartWatchdog();
         if (running && config("tts_enabled")) {
           index = instructions.length;
           updateReader();
@@ -203,9 +278,25 @@
       };
 
       activeUtterance.onerror = function (evt) {
+        clearSpeechStartWatchdog();
         console.warn("Speech Synthesis interaction error: ", evt);
+        if (running) {
+          stopSpeech();
+          defer(0);
+        }
       };
 
+      var startIndex = index;
+      speechStartWatchdog = setTimeout(function () {
+        if (!running || !config("tts_enabled")) return;
+        if (index <= startIndex) {
+          // If speech does not progress, continue with visual RSVP so reading still starts.
+          stopSpeech();
+          defer(0);
+        }
+      }, 1500);
+
+      clearVoicesWait();
       window.speechSynthesis.speak(activeUtterance);
     }
 
@@ -214,6 +305,8 @@
      * from triggering unexpected state transitions by clearing active handlers.
      */
     function stopSpeech() {
+      clearSpeechStartWatchdog();
+      clearVoicesWait();
       if (activeUtterance) {
         activeUtterance.onboundary = null;
         activeUtterance.onend = null;

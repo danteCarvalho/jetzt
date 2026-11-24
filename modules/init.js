@@ -92,7 +92,11 @@
   }
 
   jetzt.init = function (instructions, elements) {
-    if (executor) throw new Error("jetzt already initialised");
+    if (executor) {
+      executor.destroy();
+      executor = null;
+      jetzt.executor = null;
+    }
 
     jetzt.currentSelection = elements || null;
 

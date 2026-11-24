@@ -224,6 +224,21 @@
     var lastSelectedText = "";
     var lastSelectedElem = null;
 
+    function captureSelectionContext() {
+      var sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+
+      var text = sel.toString().trim();
+      if (text.length > 0) {
+        lastSelectedText = text;
+      }
+
+      if (sel.anchorNode) {
+        var node = sel.anchorNode;
+        lastSelectedElem = node.nodeType === 1 ? node : node.parentNode;
+      }
+    }
+
     function hideBubble() {
       bubble.classList.remove("visible");
       bubble.style.display = "none";
@@ -271,7 +286,7 @@
 
     document.addEventListener("selectionchange", function () {
       if (selectionTimeout) clearTimeout(selectionTimeout);
-      selectionTimeout = setTimeout(checkSelection, 300);
+      selectionTimeout = setTimeout(checkSelection, 120);
     });
 
     document.addEventListener("mousedown", function (e) {
@@ -310,6 +325,12 @@
       var elemToRead = lastSelectedElem;
 
       if (!textToRead) {
+        captureSelectionContext();
+        textToRead = lastSelectedText;
+        elemToRead = lastSelectedElem;
+      }
+
+      if (!textToRead) {
         var sel = window.getSelection();
         if (sel) {
           textToRead = sel.toString().trim();
@@ -343,6 +364,11 @@
       setTimeout(function () { triggered = false; }, 400);
 
       var elemToRead = lastSelectedElem;
+      if (!elemToRead) {
+        captureSelectionContext();
+        elemToRead = lastSelectedElem;
+      }
+
       if (!elemToRead) {
         var sel = window.getSelection();
         if (sel && sel.anchorNode) {
@@ -379,15 +405,27 @@
     }
 
     btnSelect.addEventListener("click", triggerSpeedReadSelection);
+    btnSelect.addEventListener("mousedown", function (e) {
+      captureSelectionContext();
+      e.preventDefault();
+      e.stopPropagation();
+    });
     btnSelect.addEventListener("touchend", triggerSpeedReadSelection);
     btnSelect.addEventListener("touchstart", function (e) {
+      captureSelectionContext();
       e.preventDefault();
       e.stopPropagation();
     });
 
     btnPara.addEventListener("click", triggerSpeedReadParagraph);
+    btnPara.addEventListener("mousedown", function (e) {
+      captureSelectionContext();
+      e.preventDefault();
+      e.stopPropagation();
+    });
     btnPara.addEventListener("touchend", triggerSpeedReadParagraph);
     btnPara.addEventListener("touchstart", function (e) {
+      captureSelectionContext();
       e.preventDefault();
       e.stopPropagation();
     });
