@@ -74,8 +74,42 @@
           };
           return sel;
         })()
+      , createConfigToggle = function (className, labelText, key) {
+          var label = H.elem("label", "sr-toggle-label " + className);
+          var input = H.elem("input", "sr-toggle-checkbox");
+          var text = span("sr-toggle-text");
+          input.type = "checkbox";
+          text.textContent = labelText;
+
+          input.onchange = function () {
+            config(key, !!input.checked);
+            grabFocus();
+          };
+
+          label.onkeydown = label.onkeyup = label.onkeypress = function (ev) {
+            ev.stopPropagation();
+          };
+
+          input.onkeydown = input.onkeyup = input.onkeypress = function (ev) {
+            ev.stopPropagation();
+          };
+
+          label.appendChild(input);
+          label.appendChild(text);
+          return {
+            root: label,
+            input: input
+          };
+        }
+      , ignoreNumbersToggle = createConfigToggle("sr-ignore-numbers", "Ignorar numeros", "ignore_numbers")
+      , ignoreSpecialCharsToggle = createConfigToggle("sr-ignore-special", "Ignorar especiais", "ignore_special_chars")
+      , speechOptions = div("sr-speech-options", [
+          langSelect,
+          ignoreNumbersToggle.root,
+          ignoreSpecialCharsToggle.root
+        ])
       , wordBox = div("sr-word-box", [
-          reticle, progressBar, message, word, wpm, langSelect
+          reticle, progressBar, message, word, wpm, speechOptions
         ])
       , box = div("sr-reader", [
           leftWrap,
@@ -275,6 +309,8 @@
       this.setFontWeight(config("font_weight"));
 
       langSelect.value = config("tts_lang") || "auto";
+      ignoreNumbersToggle.input.checked = !!config("ignore_numbers");
+      ignoreSpecialCharsToggle.input.checked = !!config("ignore_special_chars");
 
       if (config("show_message")) {
         this.showMessage();

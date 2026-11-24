@@ -1,7 +1,7 @@
 {
   "name": "jetzt",
-  "version": "4.1.0",
-  "description": "chrome eytension and bookmarklet for speed reading",
+  "version": "4.2.0",
+  "description": "Firefox extension for speed reading",
   "contributors": [
     "Dante Carvalho Costa"
   ],

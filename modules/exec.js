@@ -77,6 +77,23 @@
     var currentWpm = config("target_wpm");
     var currentTts = config("tts_enabled");
     var currentTtsLang = config("tts_lang");
+    var currentIgnoreNumbers = config("ignore_numbers");
+    var currentIgnoreSpecialChars = config("ignore_special_chars");
+
+    function sanitizeToken(token) {
+      var value = token || "";
+
+      if (config("ignore_numbers")) {
+        value = value.replace(/[0-9]/g, "");
+      }
+
+      if (config("ignore_special_chars")) {
+        // Keep letters, digits and punctuation, removing only symbol-like special chars.
+        value = value.replace(/[^A-Za-z0-9\u00C0-\u024F.,!?;:'"()\[\]{}\-_/\\…«»“”]/g, "");
+      }
+
+      return value;
+    }
 
     function clearSpeechStartWatchdog() {
       if (speechStartWatchdog) {
@@ -140,6 +157,10 @@
       var newTts = config("tts_enabled");
       var newWpm = config("target_wpm");
       var newTtsLang = config("tts_lang");
+      var newIgnoreNumbers = config("ignore_numbers");
+      var newIgnoreSpecialChars = config("ignore_special_chars");
+      var tokenFilterChanged = newIgnoreNumbers !== currentIgnoreNumbers
+        || newIgnoreSpecialChars !== currentIgnoreSpecialChars;
       
       if (running && newWpm !== currentWpm) {
         // Changing speed should pause playback so user can resume at the new pace.
@@ -147,20 +168,28 @@
         stopSpeech();
         setRunning(false);
       } else if (running) {
-        if (newTts !== currentTts || newTtsLang !== currentTtsLang) {
+        if (tokenFilterChanged) {
+          updateReader();
+        }
+
+        if (newTts !== currentTts || newTtsLang !== currentTtsLang || tokenFilterChanged) {
           if (newTts) {
             clearTimeout(runLoop);
             speakRemaining();
-          } else {
+          } else if (newTts !== currentTts || newTtsLang !== currentTtsLang) {
             stopSpeech();
             defer(0);
           }
         }
+      } else if (tokenFilterChanged) {
+        updateReader();
       }
       
       currentTts = newTts;
       currentWpm = newWpm;
       currentTtsLang = newTtsLang;
+      currentIgnoreNumbers = newIgnoreNumbers;
+      currentIgnoreSpecialChars = newIgnoreSpecialChars;
     });
 
     /**
@@ -192,7 +221,7 @@
       for (var i = 0; i < remainingInstructions.length; i++) {
         var realIdx = index + i;
         var instr = remainingInstructions[i];
-        var token = instr.token || "";
+        var token = sanitizeToken(instr.token || "");
 
         var startPos = fullText.length;
         fullText += token + " ";
@@ -203,7 +232,10 @@
         }
       }
 
-      if (!fullText.trim()) return;
+      if (!fullText.trim()) {
+        defer(0);
+        return;
+      }
 
       // Always paint the first token immediately so user sees reading started.
       updateReader(instructions[index]);
@@ -324,7 +356,7 @@
           instr = instructions[instructions.length - 1];
         }
       }
-      reader.setWord(instr.token, instr.decorator);
+      reader.setWord(sanitizeToken(instr.token), instr.decorator);
       reader.setWrap(instr.leftWrap, instr.rightWrap);
       reader.setProgress(100 * (index / instructions.length));
 

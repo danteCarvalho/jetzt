@@ -87,6 +87,8 @@
     selected_theme: 0,
     show_message: false,
     strip_citation: false, // Strips citation brackets or in-text citations if true
+    ignore_numbers: false,
+    ignore_special_chars: false,
     tts_enabled: true,  // Enable/disable Text-to-Speech (read-aloud) synchronized reading
     tts_lang: "auto",    // Default reading language ("auto", "pt", "en", "es", "fr", "it", "de", etc.)
     selection_color: "#FF0000",
